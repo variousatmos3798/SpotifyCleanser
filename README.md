@@ -26,9 +26,9 @@ A web-based application that helps you remove duplicate songs from your Spotify 
 2. Log in with your Spotify account
 3. Click "Create an App"
 4. Fill in the app name and description
-5. Once created, you'll see your **Client ID** and **Client Secret**
-6. Click "Edit Settings" and add `http://localhost:3000/callback` to the Redirect URIs
-7. Save the settings
+5. **IMPORTANT**: For the Redirect URI, use `http://127.0.0.1:3000/callback` (NOT localhost - Spotify requires explicit loopback IP)
+6. Once created, you'll see your **Client ID** and **Client Secret**
+7. You can add additional redirect URIs later via "Edit Settings" if needed
 
 ### 2. Install Dependencies
 
@@ -47,7 +47,7 @@ npm install
    ```
    SPOTIFY_CLIENT_ID=your_client_id_here
    SPOTIFY_CLIENT_SECRET=your_client_secret_here
-   REDIRECT_URI=http://localhost:3000/callback
+   REDIRECT_URI=http://127.0.0.1:3000/callback
    PORT=3000
    ```
 
@@ -63,7 +63,7 @@ For development with auto-restart:
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`
+The application will be available at `http://127.0.0.1:3000` (you can also use `http://localhost:3000` to access it, but OAuth redirects to 127.0.0.1)
 
 ## Usage
 
@@ -105,6 +105,7 @@ The app identifies duplicates by comparing track URIs (Spotify's unique identifi
 ### "Invalid token" error
 - Make sure your Spotify API credentials are correct in `.env`
 - Verify the redirect URI matches exactly in both `.env` and Spotify Dashboard
+- Ensure you're using `http://127.0.0.1:3000/callback` (NOT `localhost`) per Spotify's requirements
 
 ### No playlists showing
 - Ensure you've granted the necessary permissions during login
