@@ -155,8 +155,11 @@ app.post('/api/find-duplicates', async (req, res) => {
   }
 
   try {
-    const duplicates = {};
+    // First, collect ALL tracks from ALL playlists with their locations
+    const allPlaylistTracks = {};
+    const globalTrackMap = new Map(); // Track URI -> array of {playlistId, position, trackName, artists}
 
+    // Fetch tracks from all playlists
     for (const playlistId of playlistIds) {
       let allTracks = [];
       let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
@@ -170,35 +173,64 @@ app.post('/api/find-duplicates', async (req, res) => {
         url = response.data.next;
       }
 
-      // Find duplicates by track URI
-      const trackMap = new Map();
-      const playlistDuplicates = [];
+      allPlaylistTracks[playlistId] = allTracks;
 
+      // Build global track map to find tracks across all playlists
       allTracks.forEach((item, index) => {
         if (!item.track || !item.track.uri) return;
 
         const trackUri = item.track.uri;
-        const trackId = item.track.id;
+        const trackInfo = {
+          playlistId: playlistId,
+          position: index,
+          trackName: item.track.name,
+          artists: item.track.artists.map(a => a.name).join(', '),
+          trackId: item.track.id
+        };
 
-        if (trackMap.has(trackUri)) {
-          const original = trackMap.get(trackUri);
-          playlistDuplicates.push({
-            trackId: trackId,
-            trackUri: trackUri,
-            trackName: item.track.name,
-            artists: item.track.artists.map(a => a.name).join(', '),
-            position: index,
-            originalPosition: original.position
-          });
-        } else {
-          trackMap.set(trackUri, { position: index, trackId: trackId });
+        if (!globalTrackMap.has(trackUri)) {
+          globalTrackMap.set(trackUri, []);
         }
+        globalTrackMap.get(trackUri).push(trackInfo);
+      });
+    }
+
+    // Now find duplicates: tracks that appear more than once (within same playlist or across playlists)
+    const duplicates = {};
+
+    globalTrackMap.forEach((occurrences, trackUri) => {
+      // Group by playlist
+      const byPlaylist = {};
+      occurrences.forEach(occ => {
+        if (!byPlaylist[occ.playlistId]) {
+          byPlaylist[occ.playlistId] = [];
+        }
+        byPlaylist[occ.playlistId].push(occ);
       });
 
-      if (playlistDuplicates.length > 0) {
-        duplicates[playlistId] = playlistDuplicates;
-      }
-    }
+      // For each playlist, if a track appears more than once, mark duplicates (keep first, remove rest)
+      Object.entries(byPlaylist).forEach(([playlistId, instances]) => {
+        if (instances.length > 1) {
+          // Keep the first occurrence, mark the rest as duplicates
+          const duplicateInstances = instances.slice(1);
+
+          if (!duplicates[playlistId]) {
+            duplicates[playlistId] = [];
+          }
+
+          duplicateInstances.forEach(dup => {
+            duplicates[playlistId].push({
+              trackId: dup.trackId,
+              trackUri: trackUri,
+              trackName: dup.trackName,
+              artists: dup.artists,
+              position: dup.position,
+              originalPosition: instances[0].position
+            });
+          });
+        }
+      });
+    });
 
     res.json(duplicates);
   } catch (error) {
