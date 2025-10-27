@@ -60,6 +60,15 @@ class SpotifyCleanser {
             this.duplicates = {};
             this.loadPlaylists();
         });
+
+        document.getElementById('consolidate-checkbox').addEventListener('change', (e) => {
+            const nameInput = document.getElementById('consolidate-name-input');
+            if (e.target.checked) {
+                nameInput.classList.remove('hidden');
+            } else {
+                nameInput.classList.add('hidden');
+            }
+        });
     }
 
     async loadPlaylists() {
@@ -126,6 +135,7 @@ class SpotifyCleanser {
                 }
                 this.updateFindDuplicatesButton();
                 this.updateSelectAllCheckbox();
+                this.updateSelectedCount();
             });
 
             item.addEventListener('click', (e) => {
@@ -139,6 +149,7 @@ class SpotifyCleanser {
         });
 
         this.updateSelectAllCheckbox();
+        this.updateSelectedCount();
     }
 
     filterPlaylists(filter) {
@@ -157,6 +168,7 @@ class SpotifyCleanser {
             }
         });
         this.updateFindDuplicatesButton();
+        this.updateSelectedCount();
     }
 
     updateSelectAllCheckbox() {
@@ -173,6 +185,12 @@ class SpotifyCleanser {
     updateFindDuplicatesButton() {
         const button = document.getElementById('find-duplicates-btn');
         button.disabled = this.selectedPlaylists.size === 0;
+    }
+
+    updateSelectedCount() {
+        const count = this.selectedPlaylists.size;
+        const countElement = document.getElementById('selected-count');
+        countElement.textContent = `${count} selected`;
     }
 
     async findDuplicates() {
@@ -261,7 +279,14 @@ class SpotifyCleanser {
     }
 
     async removeDuplicates() {
-        if (!confirm('Are you sure you want to remove all duplicate tracks? This action cannot be undone.')) {
+        const shouldConsolidate = document.getElementById('consolidate-checkbox').checked;
+
+        let confirmMessage = 'Are you sure you want to remove all duplicate tracks? This action cannot be undone.';
+        if (shouldConsolidate) {
+            confirmMessage += '\n\nA new consolidated playlist will also be created with all unique songs.';
+        }
+
+        if (!confirm(confirmMessage)) {
             return;
         }
 
@@ -269,7 +294,9 @@ class SpotifyCleanser {
 
         try {
             let totalRemoved = 0;
+            let successMessage = '';
 
+            // Remove duplicates
             for (const [playlistId, dups] of Object.entries(this.duplicates)) {
                 const response = await fetch('/api/remove-duplicates', {
                     method: 'POST',
@@ -289,12 +316,38 @@ class SpotifyCleanser {
                 totalRemoved += result.removedCount;
             }
 
-            document.getElementById('success-text').textContent =
-                `Successfully removed ${totalRemoved} duplicate track${totalRemoved !== 1 ? 's' : ''} from your playlists!`;
+            successMessage = `Successfully removed ${totalRemoved} duplicate track${totalRemoved !== 1 ? 's' : ''} from your playlists!`;
+
+            // Consolidate if requested
+            if (shouldConsolidate) {
+                this.showLoading('Creating consolidated playlist...');
+
+                const playlistName = document.getElementById('new-playlist-name').value || 'Cleanser - Consolidated';
+                const playlistIds = Array.from(this.selectedPlaylists);
+
+                const response = await fetch('/api/consolidate-playlists', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        playlistIds: playlistIds,
+                        newPlaylistName: playlistName
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to consolidate playlists');
+
+                const result = await response.json();
+                successMessage += `\n\nCreated new playlist "${playlistName}" with ${result.trackCount} unique songs!`;
+            }
+
+            document.getElementById('success-text').textContent = successMessage;
             this.showSection('success-section');
         } catch (error) {
-            console.error('Error removing duplicates:', error);
-            alert('Failed to remove some duplicates. Please try again.');
+            console.error('Error processing playlists:', error);
+            alert('Failed to complete the operation. Please try again.');
         } finally {
             this.hideLoading();
         }

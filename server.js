@@ -258,6 +258,97 @@ app.post('/api/remove-duplicates', async (req, res) => {
   }
 });
 
+// Consolidate playlists into a new playlist
+app.post('/api/consolidate-playlists', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const { playlistIds, newPlaylistName } = req.body;
+
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  if (!playlistIds || !Array.isArray(playlistIds) || !newPlaylistName) {
+    return res.status(400).json({ error: 'Invalid request data' });
+  }
+
+  try {
+    // Get user ID
+    const userResponse = await axios.get('https://api.spotify.com/v1/me', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const userId = userResponse.data.id;
+
+    // Create new playlist
+    const createPlaylistResponse = await axios.post(
+      `https://api.spotify.com/v1/users/${userId}/playlists`,
+      {
+        name: newPlaylistName,
+        description: 'Consolidated playlist created by Spotify Cleanser',
+        public: false
+      },
+      {
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const newPlaylistId = createPlaylistResponse.data.id;
+
+    // Collect all unique tracks from selected playlists
+    const uniqueTracks = new Set();
+    const trackUris = [];
+
+    for (const playlistId of playlistIds) {
+      let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+
+      while (url) {
+        const response = await axios.get(url, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        response.data.items.forEach(item => {
+          if (item.track && item.track.uri && !uniqueTracks.has(item.track.uri)) {
+            uniqueTracks.add(item.track.uri);
+            trackUris.push(item.track.uri);
+          }
+        });
+
+        url = response.data.next;
+      }
+    }
+
+    // Add tracks to new playlist in batches (Spotify allows up to 100 tracks per request)
+    const batchSize = 100;
+    for (let i = 0; i < trackUris.length; i += batchSize) {
+      const batch = trackUris.slice(i, i + batchSize);
+
+      await axios.post(
+        `https://api.spotify.com/v1/playlists/${newPlaylistId}/tracks`,
+        {
+          uris: batch
+        },
+        {
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+
+    res.json({
+      success: true,
+      playlistId: newPlaylistId,
+      trackCount: trackUris.length
+    });
+  } catch (error) {
+    console.error('Error consolidating playlists:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to consolidate playlists' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

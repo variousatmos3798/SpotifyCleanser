@@ -28,8 +28,9 @@
             <div class="select-all-container">
                 <label>
                     <input type="checkbox" id="select-all-playlists">
-                    <span>Select All</span>
+                    <span>Select All Visible</span>
                 </label>
+                <span class="selected-count" id="selected-count">0 selected</span>
             </div>
 
             <div id="playlists-list" class="playlists-list"></div>
@@ -44,10 +45,24 @@
         <div id="duplicates-section" class="section hidden">
             <h2>Duplicates Found</h2>
             <div id="duplicates-summary" class="summary"></div>
+
+            <div class="consolidate-option">
+                <label class="consolidate-label">
+                    <input type="checkbox" id="consolidate-checkbox">
+                    <span class="consolidate-text">
+                        <strong>Create Consolidated Playlist</strong>
+                        <small>Combine all unique songs from selected playlists into one new playlist</small>
+                    </span>
+                </label>
+                <div id="consolidate-name-input" class="hidden" style="margin-top: 15px;">
+                    <input type="text" id="new-playlist-name" placeholder="Enter new playlist name..." value="Cleanser - Consolidated">
+                </div>
+            </div>
+
             <div id="duplicates-list" class="duplicates-list"></div>
             <div class="actions">
                 <button id="remove-duplicates-btn" class="btn btn-danger">
-                    Remove All Duplicates
+                    Remove Duplicates & Process
                 </button>
                 <button id="back-to-playlists-btn" class="btn btn-secondary">
                     Back to Playlists
