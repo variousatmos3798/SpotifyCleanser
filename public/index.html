@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Cleanser - Remove Duplicate Songs</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Spotify Cleanser</h1>
+            <p class="subtitle">Remove duplicate songs from your playlists</p>
+        </header>
+
+        <div id="login-section" class="section">
+            <button id="login-btn" class="btn btn-primary">Login with Spotify</button>
+        </div>
+
+        <div id="playlists-section" class="section hidden">
+            <h2>Select Playlists to Clean</h2>
+            <p class="info-text">Choose the playlists you want to scan for duplicate songs</p>
+
+            <div class="search-box">
+                <input type="text" id="playlist-search" placeholder="Search playlists...">
+            </div>
+
+            <div class="select-all-container">
+                <label>
+                    <input type="checkbox" id="select-all-playlists">
+                    <span>Select All</span>
+                </label>
+            </div>
+
+            <div id="playlists-list" class="playlists-list"></div>
+
+            <div class="actions">
+                <button id="find-duplicates-btn" class="btn btn-primary" disabled>
+                    Find Duplicates
+                </button>
+            </div>
+        </div>
+
+        <div id="duplicates-section" class="section hidden">
+            <h2>Duplicates Found</h2>
+            <div id="duplicates-summary" class="summary"></div>
+            <div id="duplicates-list" class="duplicates-list"></div>
+            <div class="actions">
+                <button id="remove-duplicates-btn" class="btn btn-danger">
+                    Remove All Duplicates
+                </button>
+                <button id="back-to-playlists-btn" class="btn btn-secondary">
+                    Back to Playlists
+                </button>
+            </div>
+        </div>
+
+        <div id="success-section" class="section hidden">
+            <div class="success-message">
+                <h2>Success!</h2>
+                <p id="success-text"></p>
+                <button id="start-over-btn" class="btn btn-primary">
+                    Clean More Playlists
+                </button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p id="loading-text">Loading...</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
