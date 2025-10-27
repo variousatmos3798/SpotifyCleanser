@@ -37,32 +37,38 @@
 
             <div class="actions">
                 <button id="find-duplicates-btn" class="btn btn-primary" disabled>
-                    Find Duplicates
+                    Analyze Playlists
                 </button>
             </div>
         </div>
 
         <div id="duplicates-section" class="section hidden">
-            <h2>Duplicates Found</h2>
+            <h2>Playlist Analysis</h2>
             <div id="duplicates-summary" class="summary"></div>
 
             <div class="consolidate-option">
                 <label class="consolidate-label">
-                    <input type="checkbox" id="consolidate-checkbox">
+                    <input type="checkbox" id="consolidate-checkbox" checked>
                     <span class="consolidate-text">
                         <strong>Create Consolidated Playlist</strong>
                         <small>Combine all unique songs from selected playlists into one new playlist</small>
                     </span>
                 </label>
-                <div id="consolidate-name-input" class="hidden" style="margin-top: 15px;">
+                <div id="consolidate-name-input" style="margin-top: 15px;">
                     <input type="text" id="new-playlist-name" placeholder="Enter new playlist name..." value="Cleanser - Consolidated">
+                </div>
+                <div style="margin-top: 15px;">
+                    <label class="delete-option-label">
+                        <input type="checkbox" id="delete-originals-checkbox">
+                        <span>Delete original playlists after consolidation</span>
+                    </label>
                 </div>
             </div>
 
             <div id="duplicates-list" class="duplicates-list"></div>
             <div class="actions">
                 <button id="remove-duplicates-btn" class="btn btn-danger">
-                    Remove Duplicates & Process
+                    Create Consolidated Playlist
                 </button>
                 <button id="back-to-playlists-btn" class="btn btn-secondary">
                     Back to Playlists

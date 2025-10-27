@@ -195,11 +195,37 @@ app.post('/api/find-duplicates', async (req, res) => {
       });
     }
 
-    // Now find duplicates: tracks that appear more than once (within same playlist or across playlists)
+    // Analyze cross-playlist duplicates and statistics
     const duplicates = {};
+    const crossPlaylistDuplicates = [];
+    let totalUniqueTracks = 0;
+    let totalTracks = 0;
+    const playlistNames = {};
+
+    // Get playlist names
+    for (const playlistId of playlistIds) {
+      const response = await axios.get(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      playlistNames[playlistId] = response.data.name;
+    }
 
     globalTrackMap.forEach((occurrences, trackUri) => {
-      // Group by playlist
+      totalUniqueTracks++;
+      totalTracks += occurrences.length;
+
+      // If track appears in multiple playlists, it's a cross-playlist duplicate
+      if (occurrences.length > 1) {
+        const playlistsWithTrack = occurrences.map(occ => playlistNames[occ.playlistId]);
+        crossPlaylistDuplicates.push({
+          trackName: occurrences[0].trackName,
+          artists: occurrences[0].artists,
+          appearsIn: playlistsWithTrack,
+          occurrenceCount: occurrences.length
+        });
+      }
+
+      // Group by playlist to find within-playlist duplicates
       const byPlaylist = {};
       occurrences.forEach(occ => {
         if (!byPlaylist[occ.playlistId]) {
@@ -208,10 +234,9 @@ app.post('/api/find-duplicates', async (req, res) => {
         byPlaylist[occ.playlistId].push(occ);
       });
 
-      // For each playlist, if a track appears more than once, mark duplicates (keep first, remove rest)
+      // Mark within-playlist duplicates
       Object.entries(byPlaylist).forEach(([playlistId, instances]) => {
         if (instances.length > 1) {
-          // Keep the first occurrence, mark the rest as duplicates
           const duplicateInstances = instances.slice(1);
 
           if (!duplicates[playlistId]) {
@@ -232,7 +257,15 @@ app.post('/api/find-duplicates', async (req, res) => {
       });
     });
 
-    res.json(duplicates);
+    res.json({
+      duplicates,
+      statistics: {
+        totalUniqueTracks,
+        totalTracks,
+        crossPlaylistDuplicates: crossPlaylistDuplicates.length,
+        duplicateSongs: crossPlaylistDuplicates.sort((a, b) => b.occurrenceCount - a.occurrenceCount).slice(0, 20)
+      }
+    });
   } catch (error) {
     console.error('Error finding duplicates:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to find duplicates' });
@@ -378,6 +411,50 @@ app.post('/api/consolidate-playlists', async (req, res) => {
   } catch (error) {
     console.error('Error consolidating playlists:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to consolidate playlists' });
+  }
+});
+
+// Delete playlists
+app.post('/api/delete-playlists', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const { playlistIds } = req.body;
+
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  if (!playlistIds || !Array.isArray(playlistIds)) {
+    return res.status(400).json({ error: 'Invalid playlist IDs' });
+  }
+
+  try {
+    let deletedCount = 0;
+
+    for (const playlistId of playlistIds) {
+      try {
+        // Unfollow (delete) playlist
+        await axios.delete(
+          `https://api.spotify.com/v1/playlists/${playlistId}/followers`,
+          {
+            headers: {
+              'Authorization': 'Bearer ' + token
+            }
+          }
+        );
+        deletedCount++;
+      } catch (error) {
+        console.error(`Failed to delete playlist ${playlistId}:`, error.response?.data || error.message);
+        // Continue with other playlists even if one fails
+      }
+    }
+
+    res.json({
+      success: true,
+      deletedCount
+    });
+  } catch (error) {
+    console.error('Error deleting playlists:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to delete playlists' });
   }
 });
 

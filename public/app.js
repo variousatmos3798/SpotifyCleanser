@@ -194,7 +194,7 @@ class SpotifyCleanser {
     }
 
     async findDuplicates() {
-        this.showLoading('Scanning playlists for duplicates...');
+        this.showLoading('Analyzing playlists...');
 
         try {
             const response = await fetch('/api/find-duplicates', {
@@ -208,14 +208,16 @@ class SpotifyCleanser {
                 })
             });
 
-            if (!response.ok) throw new Error('Failed to find duplicates');
+            if (!response.ok) throw new Error('Failed to analyze playlists');
 
-            this.duplicates = await response.json();
+            const data = await response.json();
+            this.duplicates = data.duplicates || {};
+            this.statistics = data.statistics || {};
             this.renderDuplicates();
             this.showSection('duplicates-section');
         } catch (error) {
-            console.error('Error finding duplicates:', error);
-            alert('Failed to find duplicates. Please try again.');
+            console.error('Error analyzing playlists:', error);
+            alert('Failed to analyze playlists. Please try again.');
         } finally {
             this.hideLoading();
         }
@@ -224,55 +226,42 @@ class SpotifyCleanser {
     renderDuplicates() {
         const duplicatesList = document.getElementById('duplicates-list');
         const summary = document.getElementById('duplicates-summary');
+        const stats = this.statistics || {};
 
-        const playlistCount = Object.keys(this.duplicates).length;
-        const totalDuplicates = Object.values(this.duplicates).reduce(
-            (sum, dups) => sum + dups.length, 0
-        );
-
-        if (totalDuplicates === 0) {
-            summary.innerHTML = `
-                <div class="empty-state">
-                    <h3>No duplicates found!</h3>
-                    <p>Your selected playlists are clean.</p>
-                </div>
-            `;
-            duplicatesList.innerHTML = '';
-            document.getElementById('remove-duplicates-btn').style.display = 'none';
-            return;
-        }
+        // Show cross-playlist statistics
+        const totalUnique = stats.totalUniqueTracks || 0;
+        const totalTracks = stats.totalTracks || 0;
+        const crossPlaylistDups = stats.crossPlaylistDuplicates || 0;
+        const duplicateSongs = stats.duplicateSongs || [];
 
         summary.innerHTML = `
-            <p><strong>Found ${totalDuplicates} duplicate track${totalDuplicates !== 1 ? 's' : ''}</strong>
-               across ${playlistCount} playlist${playlistCount !== 1 ? 's' : ''}.</p>
-            <p>Click "Remove All Duplicates" to clean your playlists.</p>
+            <p><strong>Analysis Results:</strong></p>
+            <p><strong>${totalUnique}</strong> unique songs across <strong>${this.selectedPlaylists.size}</strong> playlists</p>
+            <p><strong>${totalTracks}</strong> total song instances</p>
+            <p><strong>${crossPlaylistDups}</strong> songs appear in multiple playlists</p>
+            <p style="margin-top: 15px; color: #1db954;">Use the consolidation option below to combine all unique songs into one playlist!</p>
         `;
 
         duplicatesList.innerHTML = '';
 
-        for (const [playlistId, dups] of Object.entries(this.duplicates)) {
-            const playlist = this.playlists.find(p => p.id === playlistId);
-            if (!playlist) continue;
-
-            const playlistDiv = document.createElement('div');
-            playlistDiv.className = 'playlist-duplicates';
-
-            playlistDiv.innerHTML = `
-                <h3>
-                    ${this.escapeHtml(playlist.name)}
-                    <span class="duplicate-count">${dups.length} duplicate${dups.length !== 1 ? 's' : ''}</span>
-                </h3>
+        if (duplicateSongs.length > 0) {
+            const topDupsDiv = document.createElement('div');
+            topDupsDiv.className = 'playlist-duplicates';
+            topDupsDiv.innerHTML = `
+                <h3>Top Songs Appearing in Multiple Playlists</h3>
                 <div class="duplicates-items">
-                    ${dups.map(dup => `
+                    ${duplicateSongs.map(dup => `
                         <div class="duplicate-item">
                             <div class="duplicate-track-name">${this.escapeHtml(dup.trackName)}</div>
                             <div class="duplicate-artist">${this.escapeHtml(dup.artists)}</div>
+                            <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                                Appears in ${dup.occurrenceCount} playlists: ${dup.appearsIn.slice(0, 3).map(p => this.escapeHtml(p)).join(', ')}${dup.appearsIn.length > 3 ? '...' : ''}
+                            </div>
                         </div>
                     `).join('')}
                 </div>
             `;
-
-            duplicatesList.appendChild(playlistDiv);
+            duplicatesList.appendChild(topDupsDiv);
         }
 
         document.getElementById('remove-duplicates-btn').style.display = 'inline-block';
@@ -280,67 +269,69 @@ class SpotifyCleanser {
 
     async removeDuplicates() {
         const shouldConsolidate = document.getElementById('consolidate-checkbox').checked;
+        const shouldDelete = document.getElementById('delete-originals-checkbox').checked;
 
-        let confirmMessage = 'Are you sure you want to remove all duplicate tracks? This action cannot be undone.';
-        if (shouldConsolidate) {
-            confirmMessage += '\n\nA new consolidated playlist will also be created with all unique songs.';
+        if (!shouldConsolidate) {
+            alert('Please check the "Create Consolidated Playlist" option to proceed.');
+            return;
         }
+
+        let confirmMessage = `This will create a new consolidated playlist with all unique songs from your ${this.selectedPlaylists.size} selected playlists.`;
+        if (shouldDelete) {
+            confirmMessage += '\n\nWARNING: The original playlists will be DELETED. This cannot be undone!';
+        }
+        confirmMessage += '\n\nDo you want to continue?';
 
         if (!confirm(confirmMessage)) {
             return;
         }
 
-        this.showLoading('Removing duplicates...');
+        this.showLoading('Creating consolidated playlist...');
 
         try {
-            let totalRemoved = 0;
             let successMessage = '';
+            const playlistName = document.getElementById('new-playlist-name').value || 'Cleanser - Consolidated';
+            const playlistIds = Array.from(this.selectedPlaylists);
 
-            // Remove duplicates
-            for (const [playlistId, dups] of Object.entries(this.duplicates)) {
-                const response = await fetch('/api/remove-duplicates', {
+            // Create consolidated playlist
+            const response = await fetch('/api/consolidate-playlists', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    playlistIds: playlistIds,
+                    newPlaylistName: playlistName
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to consolidate playlists');
+
+            const result = await response.json();
+            successMessage = `Created new playlist "${playlistName}" with ${result.trackCount} unique songs!`;
+
+            // Delete original playlists if requested
+            if (shouldDelete) {
+                this.showLoading('Deleting original playlists...');
+
+                const deleteResponse = await fetch('/api/delete-playlists', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${this.accessToken}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        playlistId: playlistId,
-                        duplicates: dups
+                        playlistIds: playlistIds
                     })
                 });
 
-                if (!response.ok) throw new Error('Failed to remove duplicates');
-
-                const result = await response.json();
-                totalRemoved += result.removedCount;
-            }
-
-            successMessage = `Successfully removed ${totalRemoved} duplicate track${totalRemoved !== 1 ? 's' : ''} from your playlists!`;
-
-            // Consolidate if requested
-            if (shouldConsolidate) {
-                this.showLoading('Creating consolidated playlist...');
-
-                const playlistName = document.getElementById('new-playlist-name').value || 'Cleanser - Consolidated';
-                const playlistIds = Array.from(this.selectedPlaylists);
-
-                const response = await fetch('/api/consolidate-playlists', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${this.accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        playlistIds: playlistIds,
-                        newPlaylistName: playlistName
-                    })
-                });
-
-                if (!response.ok) throw new Error('Failed to consolidate playlists');
-
-                const result = await response.json();
-                successMessage += `\n\nCreated new playlist "${playlistName}" with ${result.trackCount} unique songs!`;
+                if (deleteResponse.ok) {
+                    const deleteResult = await deleteResponse.json();
+                    successMessage += `\n\nDeleted ${deleteResult.deletedCount} original playlists.`;
+                } else {
+                    successMessage += `\n\nWarning: Some playlists could not be deleted.`;
+                }
             }
 
             document.getElementById('success-text').textContent = successMessage;
