@@ -57,6 +57,24 @@
                 <div id="consolidate-name-input" style="margin-top: 15px;">
                     <input type="text" id="new-playlist-name" placeholder="Enter new playlist name..." value="Cleanser - Consolidated">
                 </div>
+
+                <div class="audio-filter-section">
+                    <h4>Smart Filtering (Optional)</h4>
+                    <p class="filter-description">Filter songs by energy, mood, and intensity using Spotify's audio analysis</p>
+
+                    <div class="filter-presets">
+                        <button class="preset-btn" data-preset="intense">Intense Workout</button>
+                        <button class="preset-btn" data-preset="aggressive">Angry/Aggressive</button>
+                        <button class="preset-btn" data-preset="upbeat">Upbeat/Happy</button>
+                        <button class="preset-btn" data-preset="chill">Chill Vibes</button>
+                        <button class="preset-btn" data-preset="clear">Clear Filters</button>
+                    </div>
+
+                    <div class="filter-details hidden" id="filter-details">
+                        <div class="filter-info">Filters applied</div>
+                    </div>
+                </div>
+
                 <div style="margin-top: 15px;">
                     <label class="delete-option-label">
                         <input type="checkbox" id="delete-originals-checkbox">

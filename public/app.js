@@ -4,6 +4,8 @@ class SpotifyCleanser {
         this.playlists = [];
         this.selectedPlaylists = new Set();
         this.duplicates = {};
+        this.audioFilters = null;
+        this.activePreset = null;
         this.init();
     }
 
@@ -69,6 +71,80 @@ class SpotifyCleanser {
                 nameInput.classList.add('hidden');
             }
         });
+
+        // Audio filter preset buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const preset = e.target.dataset.preset;
+                this.applyPreset(preset);
+            });
+        });
+    }
+
+    applyPreset(preset) {
+        // Remove active class from all buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        const filterDetails = document.getElementById('filter-details');
+        const filterInfo = filterDetails.querySelector('.filter-info');
+
+        switch(preset) {
+            case 'intense':
+                // High energy + fast tempo = intense workout
+                this.audioFilters = {
+                    minEnergy: 0.7,
+                    minTempo: 120
+                };
+                this.activePreset = 'intense';
+                document.querySelector('[data-preset="intense"]').classList.add('active');
+                filterInfo.textContent = 'Filters: High Energy (>0.7) + Fast Tempo (>120 BPM) - Perfect for intense workouts!';
+                filterDetails.classList.remove('hidden');
+                break;
+
+            case 'aggressive':
+                // High energy + low valence + high loudness = aggressive/angry
+                this.audioFilters = {
+                    minEnergy: 0.65,
+                    maxValence: 0.4
+                };
+                this.activePreset = 'aggressive';
+                document.querySelector('[data-preset="aggressive"]').classList.add('active');
+                filterInfo.textContent = 'Filters: High Energy (>0.65) + Low Mood (<0.4) - Angry/aggressive vibes!';
+                filterDetails.classList.remove('hidden');
+                break;
+
+            case 'upbeat':
+                // High energy + high valence = happy/upbeat
+                this.audioFilters = {
+                    minEnergy: 0.6,
+                    minValence: 0.6
+                };
+                this.activePreset = 'upbeat';
+                document.querySelector('[data-preset="upbeat"]').classList.add('active');
+                filterInfo.textContent = 'Filters: High Energy (>0.6) + Happy Mood (>0.6) - Upbeat and positive!';
+                filterDetails.classList.remove('hidden');
+                break;
+
+            case 'chill':
+                // Low energy = chill
+                this.audioFilters = {
+                    maxEnergy: 0.5,
+                    minValence: 0.3
+                };
+                this.activePreset = 'chill';
+                document.querySelector('[data-preset="chill"]').classList.add('active');
+                filterInfo.textContent = 'Filters: Low Energy (<0.5) - Chill and relaxed vibes!';
+                filterDetails.classList.remove('hidden');
+                break;
+
+            case 'clear':
+                this.audioFilters = null;
+                this.activePreset = null;
+                filterDetails.classList.add('hidden');
+                break;
+        }
     }
 
     async loadPlaylists() {
@@ -294,22 +370,34 @@ class SpotifyCleanser {
             const playlistIds = Array.from(this.selectedPlaylists);
 
             // Create consolidated playlist
+            const requestBody = {
+                playlistIds: playlistIds,
+                newPlaylistName: playlistName
+            };
+
+            // Add audio filters if applied
+            if (this.audioFilters) {
+                requestBody.audioFilters = this.audioFilters;
+            }
+
             const response = await fetch('/api/consolidate-playlists', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.accessToken}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    playlistIds: playlistIds,
-                    newPlaylistName: playlistName
-                })
+                body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) throw new Error('Failed to consolidate playlists');
 
             const result = await response.json();
-            successMessage = `Created new playlist "${playlistName}" with ${result.trackCount} unique songs!`;
+
+            if (result.filtersApplied) {
+                successMessage = `Created new playlist "${playlistName}" with ${result.trackCount} songs (filtered from ${result.totalTracksAnalyzed} total)!`;
+            } else {
+                successMessage = `Created new playlist "${playlistName}" with ${result.trackCount} unique songs!`;
+            }
 
             // Delete original playlists if requested
             if (shouldDelete) {

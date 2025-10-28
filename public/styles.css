@@ -333,6 +333,78 @@ h2 {
     cursor: pointer;
 }
 
+.audio-filter-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px dashed #1db954;
+}
+
+.audio-filter-section h4 {
+    color: #191414;
+    margin-bottom: 8px;
+    font-size: 1.1em;
+}
+
+.filter-description {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 15px;
+}
+
+.filter-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.preset-btn {
+    padding: 10px 18px;
+    border: 2px solid #1db954;
+    background: white;
+    color: #1db954;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.preset-btn:hover {
+    background: #1db954;
+    color: white;
+    transform: translateY(-2px);
+}
+
+.preset-btn.active {
+    background: #1db954;
+    color: white;
+}
+
+.preset-btn[data-preset="clear"] {
+    border-color: #666;
+    color: #666;
+}
+
+.preset-btn[data-preset="clear"]:hover {
+    background: #666;
+    color: white;
+}
+
+.filter-details {
+    background: #e8f5e9;
+    border: 1px solid #1db954;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+}
+
+.filter-info {
+    color: #1db954;
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
 #consolidate-name-input input {
     width: 100%;
     padding: 12px 20px;

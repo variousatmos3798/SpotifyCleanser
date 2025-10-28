@@ -323,10 +323,10 @@ app.post('/api/remove-duplicates', async (req, res) => {
   }
 });
 
-// Consolidate playlists into a new playlist
+// Consolidate playlists into a new playlist with optional audio feature filtering
 app.post('/api/consolidate-playlists', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  const { playlistIds, newPlaylistName } = req.body;
+  const { playlistIds, newPlaylistName, audioFilters } = req.body;
 
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });
@@ -363,7 +363,7 @@ app.post('/api/consolidate-playlists', async (req, res) => {
 
     // Collect all unique tracks from selected playlists
     const uniqueTracks = new Set();
-    const trackUris = [];
+    const trackDetails = [];
 
     for (const playlistId of playlistIds) {
       let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
@@ -376,13 +376,60 @@ app.post('/api/consolidate-playlists', async (req, res) => {
         response.data.items.forEach(item => {
           if (item.track && item.track.uri && !uniqueTracks.has(item.track.uri)) {
             uniqueTracks.add(item.track.uri);
-            trackUris.push(item.track.uri);
+            trackDetails.push({
+              uri: item.track.uri,
+              id: item.track.id,
+              name: item.track.name,
+              artists: item.track.artists.map(a => a.name).join(', ')
+            });
           }
         });
 
         url = response.data.next;
       }
     }
+
+    let filteredTracks = trackDetails;
+
+    // Apply audio feature filtering if specified
+    if (audioFilters && (audioFilters.minEnergy || audioFilters.maxEnergy || audioFilters.minTempo || audioFilters.maxTempo || audioFilters.minValence || audioFilters.maxValence)) {
+      const trackIds = trackDetails.map(t => t.id).filter(id => id);
+
+      // Fetch audio features in batches of 100
+      const audioFeatures = [];
+      for (let i = 0; i < trackIds.length; i += 100) {
+        const batch = trackIds.slice(i, i + 100);
+        const featuresResponse = await axios.get(
+          `https://api.spotify.com/v1/audio-features?ids=${batch.join(',')}`,
+          {
+            headers: { 'Authorization': 'Bearer ' + token }
+          }
+        );
+        audioFeatures.push(...featuresResponse.data.audio_features);
+      }
+
+      // Filter tracks based on audio features
+      filteredTracks = trackDetails.filter((track, index) => {
+        const features = audioFeatures[index];
+        if (!features) return false;
+
+        // Apply energy filter
+        if (audioFilters.minEnergy !== undefined && features.energy < audioFilters.minEnergy) return false;
+        if (audioFilters.maxEnergy !== undefined && features.energy > audioFilters.maxEnergy) return false;
+
+        // Apply tempo filter
+        if (audioFilters.minTempo !== undefined && features.tempo < audioFilters.minTempo) return false;
+        if (audioFilters.maxTempo !== undefined && features.tempo > audioFilters.maxTempo) return false;
+
+        // Apply valence filter (happiness/sadness)
+        if (audioFilters.minValence !== undefined && features.valence < audioFilters.minValence) return false;
+        if (audioFilters.maxValence !== undefined && features.valence > audioFilters.maxValence) return false;
+
+        return true;
+      });
+    }
+
+    const trackUris = filteredTracks.map(t => t.uri);
 
     // Add tracks to new playlist in batches (Spotify allows up to 100 tracks per request)
     const batchSize = 100;
@@ -406,7 +453,9 @@ app.post('/api/consolidate-playlists', async (req, res) => {
     res.json({
       success: true,
       playlistId: newPlaylistId,
-      trackCount: trackUris.length
+      trackCount: trackUris.length,
+      totalTracksAnalyzed: trackDetails.length,
+      filtersApplied: !!audioFilters
     });
   } catch (error) {
     console.error('Error consolidating playlists:', error.response?.data || error.message);
